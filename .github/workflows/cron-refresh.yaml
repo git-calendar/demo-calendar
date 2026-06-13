@@ -1,0 +1,99 @@
+name: Refresh demo calendar
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Generate demo events
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export TZ="Europe/Prague"
+
+          calendar="demo-calendar"
+          events_dir="events"
+          updated_at="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
+
+          mkdir -p "$events_dir"
+          rm -f "$events_dir"/*.json
+
+          today="$(date +%Y-%m-%d)"
+          weekday="$(date +%u)" # Monday=1, Sunday=7
+          monday="$(date -d "$today -$((weekday - 1)) days" +%Y-%m-%d)"
+
+          datetime() {
+            local day_offset="$1"
+            local time="$2"
+
+            date -d "$monday +${day_offset} days ${time}" +"%Y-%m-%dT%H:%M:%S%:z"
+          }
+
+          write_event() {
+            local id="$1"
+            local title="$2"
+            local from="$3"
+            local to="$4"
+
+            cat > "$events_dir/$id.json" <<EOF
+          {
+            "title": "$title",
+            "from": "$from",
+            "to": "$to",
+            "calendar": "$calendar",
+            "updated_at": "$updated_at"
+          }
+          EOF
+          }
+
+          write_event \
+            "fef7fbd1-f527-4f3a-9a34-376549a24e59" \
+            "Meeting" \
+            "$(datetime 0 "15:00")" \
+            "$(datetime 0 "18:00")"
+
+          write_event \
+            "9724db06-942f-4637-b3dd-6d5c01b46c21" \
+            "Coffee break" \
+            "$(datetime 1 "10:00")" \
+            "$(datetime 1 "11:00")"
+
+          write_event \
+            "de17f957-1045-44f8-a04f-94ce4e9a7efe" \
+            "Lunch time" \
+            "$(datetime 2 "12:30")" \
+            "$(datetime 2 "13:30")"
+
+          write_event \
+            "37f9434f-e46d-4e04-9709-392b75a0cc13" \
+            "Dentist appointment" \
+            "$(datetime 4 "15:00")" \
+            "$(datetime 4 "16:00")"
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "git-calendar"
+
+          git add -A events
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Refresh demo calendar events"
+          git push
