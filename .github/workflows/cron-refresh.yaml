@@ -15,16 +15,42 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Generate demo events
+      - name: Generate demo events and tags
         shell: bash
         run: |
           set -euo pipefail
 
           export TZ="Europe/Prague"
 
-          calendar="demo-calendar"
           events_dir="events"
+          tags_dir="tags"
           updated_at="$(date +"%Y-%m-%dT%H:%M:%S%:z")"
+
+          work_tag="3c8f1a2b-4d5e-4f6a-8b7c-9d0e1f2a3b4c"
+          personal_tag="d4e5f6a7-b8c9-4d0e-af1b-2c3d4e5f6a7b"
+
+          # --- Tags ---
+
+          mkdir -p "$tags_dir"
+          rm -f "$tags_dir"/*.json
+
+          cat > "$tags_dir/$work_tag.json" <<EOF
+          {
+            "name": "Work",
+            "color": "green",
+            "updated_at": "$updated_at"
+          }
+          EOF
+
+          cat > "$tags_dir/$personal_tag.json" <<EOF
+          {
+            "name": "Personal",
+            "color": "blue",
+            "updated_at": "$updated_at"
+          }
+          EOF
+
+          # --- Events ---
 
           mkdir -p "$events_dir"
           rm -f "$events_dir"/*.json
@@ -45,29 +71,43 @@ jobs:
             local title="$2"
             local from="$3"
             local to="$4"
+            local tag_id="${5:-}"
 
-            cat > "$events_dir/$id.json" <<EOF
+            if [[ -n "$tag_id" ]]; then
+              cat > "$events_dir/$id.json" <<EOF
           {
             "title": "$title",
             "from": "$from",
             "to": "$to",
-            "calendar": "$calendar",
+            "tag_id": "$tag_id",
             "updated_at": "$updated_at"
           }
           EOF
+            else
+              cat > "$events_dir/$id.json" <<EOF
+          {
+            "title": "$title",
+            "from": "$from",
+            "to": "$to",
+            "updated_at": "$updated_at"
+          }
+          EOF
+            fi
           }
 
           write_event \
             "fef7fbd1-f527-4f3a-9a34-376549a24e59" \
             "Meeting" \
             "$(datetime 0 "15:00")" \
-            "$(datetime 0 "18:00")"
+            "$(datetime 0 "18:00")" \
+            "$work_tag"
 
           write_event \
             "9724db06-942f-4637-b3dd-6d5c01b46c21" \
             "Coffee break" \
             "$(datetime 1 "10:00")" \
-            "$(datetime 1 "11:00")"
+            "$(datetime 1 "11:00")" \
+            "$work_tag"
 
           write_event \
             "de17f957-1045-44f8-a04f-94ce4e9a7efe" \
@@ -79,7 +119,8 @@ jobs:
             "37f9434f-e46d-4e04-9709-392b75a0cc13" \
             "Dentist appointment" \
             "$(datetime 4 "15:00")" \
-            "$(datetime 4 "16:00")"
+            "$(datetime 4 "16:00")" \
+            "$personal_tag"
 
       - name: Commit changes
         shell: bash
@@ -88,7 +129,7 @@ jobs:
 
           git config user.name "git-calendar"
 
-          git add -A events
+          git add -A events tags
 
           if git diff --cached --quiet; then
             echo "No changes to commit."
